@@ -21,7 +21,7 @@ type AccessTokenGenDefault struct {
 }
 
 // GenerateAccessToken generates base64-encoded UUID access and refresh tokens
-func (a *AccessTokenGenDefault) GenerateAccessToken(data *AccessData, generaterefresh bool) (accesstoken string, refreshtoken string, err error) {
+func (a *AccessTokenGenDefault) GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, err error) {
 	token := uuid.NewRandom()
 	accesstoken = base64.RawURLEncoding.EncodeToString([]byte(token))
 

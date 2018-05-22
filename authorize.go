@@ -11,8 +11,10 @@ import (
 type AuthorizeRequestType string
 
 const (
-	CODE  AuthorizeRequestType = "code"
-	TOKEN AuthorizeRequestType = "token"
+	CODE           AuthorizeRequestType = "code"
+	TOKEN          AuthorizeRequestType = "token"
+	ID_TOKEN       AuthorizeRequestType = "id_token"
+	ID_TOKEN_TOKEN AuthorizeRequestType = "id_token token"
 
 	PKCE_PLAIN = "plain"
 	PKCE_S256  = "S256"
@@ -156,7 +158,12 @@ func (s *Server) HandleAuthorizeRequest(w *Response, r *http.Request) *Authorize
 
 	w.SetRedirect(ret.RedirectUri)
 
-	requestType := AuthorizeRequestType(r.Form.Get("response_type"))
+	rawRequestType := r.Form.Get("response_type")
+	if rawRequestType == "id_token token" || rawRequestType == "token id_token" {
+		rawRequestType = "id_token token"
+	}
+
+	requestType := AuthorizeRequestType(rawRequestType)
 	if s.Config.AllowedAuthorizeTypes.Exists(requestType) {
 		switch requestType {
 		case CODE:
@@ -195,6 +202,14 @@ func (s *Server) HandleAuthorizeRequest(w *Response, r *http.Request) *Authorize
 		case TOKEN:
 			ret.Type = TOKEN
 			ret.Expiration = s.Config.AccessExpiration
+
+		case ID_TOKEN:
+			ret.Type = ID_TOKEN
+			ret.Expiration = s.Config.AccessExpiration
+
+		case ID_TOKEN_TOKEN:
+			ret.Type = ID_TOKEN_TOKEN
+			ret.Expiration = s.Config.AccessExpiration
 		}
 		return ret
 	}
@@ -213,20 +228,25 @@ func (s *Server) FinishAuthorizeRequest(w *Response, r *http.Request, ar *Author
 	w.SetRedirect(ar.RedirectUri)
 
 	if ar.Authorized {
-		if ar.Type == TOKEN {
+		if ar.Type == TOKEN || ar.Type == ID_TOKEN || ar.Type == ID_TOKEN_TOKEN {
 			w.SetRedirectFragment(true)
+			skipGenerateAccessToken := false
+			if ar.Type == ID_TOKEN {
+				skipGenerateAccessToken = true
+			}
 
 			// generate token directly
 			ret := &AccessRequest{
-				Type:            IMPLICIT,
-				Code:            "",
-				Client:          ar.Client,
-				RedirectUri:     ar.RedirectUri,
-				Scope:           ar.Scope,
-				GenerateRefresh: false, // per the RFC, should NOT generate a refresh token in this case
-				Authorized:      true,
-				Expiration:      ar.Expiration,
-				UserData:        ar.UserData,
+				Type:                    IMPLICIT,
+				Code:                    "",
+				Client:                  ar.Client,
+				RedirectUri:             ar.RedirectUri,
+				Scope:                   ar.Scope,
+				GenerateRefresh:         false,                   // per the RFC, should NOT generate a refresh token in this case
+				SkipGenerateAccessToken: skipGenerateAccessToken, // do not gen access token if id_token
+				Authorized:              true,
+				Expiration:              ar.Expiration,
+				UserData:                ar.UserData,
 			}
 
 			s.FinishAccessRequest(w, r, ret)

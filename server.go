@@ -10,6 +10,7 @@ type Server struct {
 	Storage           Storage
 	AuthorizeTokenGen AuthorizeTokenGen
 	AccessTokenGen    AccessTokenGen
+	IDTokenGen        IDTokenGen
 	Now               func() time.Time
 	Logger            Logger
 }

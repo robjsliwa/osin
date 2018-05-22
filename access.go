@@ -47,6 +47,9 @@ type AccessRequest struct {
 	// Set if a refresh token should be generated
 	GenerateRefresh bool
 
+	// Set to skip generation of access token (for id_token only)
+	SkipGenerateAccessToken bool
+
 	// Data to be passed to storage. Not used by the library.
 	UserData interface{}
 
@@ -107,7 +110,12 @@ func (d *AccessData) ExpireAt() time.Time {
 
 // AccessTokenGen generates access tokens
 type AccessTokenGen interface {
-	GenerateAccessToken(data *AccessData, generaterefresh bool) (accesstoken string, refreshtoken string, err error)
+	GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, err error)
+}
+
+// IDTokenGen generates access tokens
+type IDTokenGen interface {
+	GenerateIDToken(data *AccessData) (idtoken string, err error)
 }
 
 // HandleAccessRequest is the http.HandlerFunc for handling access token requests
@@ -477,7 +485,7 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 			}
 
 			// generate access token
-			ret.AccessToken, ret.RefreshToken, err = s.AccessTokenGen.GenerateAccessToken(ret, ar.GenerateRefresh)
+			ret.AccessToken, ret.RefreshToken, err = s.AccessTokenGen.GenerateAccessToken(ret, ar.GenerateRefresh, ar.SkipGenerateAccessToken)
 			if err != nil {
 				s.setErrorAndLog(w, E_SERVER_ERROR, err, "finish_access_request=%s", "error generating token")
 				return
@@ -506,7 +514,15 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 		}
 
 		// output data
-		w.Output["access_token"] = ret.AccessToken
+		idToken, err := s.IDTokenGen.GenerateIDToken(ret)
+		if err != nil {
+			s.setErrorAndLog(w, E_SERVER_ERROR, err, "finish_access_request=%s", "error generating token")
+			return
+		}
+
+		if ret.AccessToken != "" {
+			w.Output["access_token"] = ret.AccessToken
+		}
 		w.Output["token_type"] = s.Config.TokenType
 		w.Output["expires_in"] = ret.ExpiresIn
 		if ret.RefreshToken != "" {
@@ -514,6 +530,9 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 		}
 		if ret.Scope != "" {
 			w.Output["scope"] = ret.Scope
+		}
+		if idToken != "" {
+			w.Output["id_token"] = idToken
 		}
 	} else {
 		s.setErrorAndLog(w, E_ACCESS_DENIED, nil, "finish_access_request=%s", "authorization failed")
