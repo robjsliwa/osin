@@ -146,7 +146,8 @@ type TestingAccessTokenGen struct {
 	rcounter int64
 }
 
-func (a *TestingAccessTokenGen) GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, err error) {
+func (a *TestingAccessTokenGen) GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, accessstokenduration uint64, err error) {
+	accessstokenduration = 0
 	a.acounter++
 	accesstoken = strconv.FormatInt(a.acounter, 10)
 

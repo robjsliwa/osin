@@ -110,7 +110,7 @@ func (d *AccessData) ExpireAt() time.Time {
 
 // AccessTokenGen generates access tokens
 type AccessTokenGen interface {
-	GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, err error)
+	GenerateAccessToken(data *AccessData, generaterefresh, skipGenerateAccessToken bool) (accesstoken string, refreshtoken string, accesstokenduration uint64, err error)
 }
 
 // IDTokenGen generates access tokens
@@ -462,6 +462,8 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 	if w.IsError {
 		return
 	}
+	var accessTokenDuration uint64
+
 	redirectUri := r.Form.Get("redirect_uri")
 	// Get redirect uri from AccessRequest if it's there (e.g., refresh token request)
 	if ar.RedirectUri != "" {
@@ -485,7 +487,7 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 			}
 
 			// generate access token
-			ret.AccessToken, ret.RefreshToken, err = s.AccessTokenGen.GenerateAccessToken(ret, ar.GenerateRefresh, ar.SkipGenerateAccessToken)
+			ret.AccessToken, ret.RefreshToken, accessTokenDuration, err = s.AccessTokenGen.GenerateAccessToken(ret, ar.GenerateRefresh, ar.SkipGenerateAccessToken)
 			if err != nil {
 				s.setErrorAndLog(w, E_SERVER_ERROR, err, "finish_access_request=%s", "error generating token")
 				return
@@ -524,7 +526,12 @@ func (s *Server) FinishAccessRequest(w *Response, r *http.Request, ar *AccessReq
 			w.Output["access_token"] = ret.AccessToken
 		}
 		w.Output["token_type"] = s.Config.TokenType
-		w.Output["expires_in"] = ret.ExpiresIn
+		if accessTokenDuration == 0 {
+			w.Output["expires_in"] = ret.ExpiresIn
+		} else {
+			w.Output["expires_in"] = accessTokenDuration
+		}
+
 		if ret.RefreshToken != "" {
 			w.Output["refresh_token"] = ret.RefreshToken
 		}
